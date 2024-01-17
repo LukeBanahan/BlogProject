@@ -4,6 +4,7 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
+const sanitizeHtml = require('sanitize-html');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
