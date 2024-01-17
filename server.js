@@ -3,6 +3,7 @@ const session = require('express-session');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.use((req, res, next) => {
     next();
   });
 
+  // get all blogs from db where current userId = author
   const getUserBlogs = (userId, callback) => {
     const query = 'SELECT * FROM blogs WHERE author_id = ?';
     db.all(query, [userId], (err, blogs) => {
@@ -35,7 +37,7 @@ app.use((req, res, next) => {
 app.set('view-engine', 'ejs')
 
 app.get('/', (req, res) => {
-    res.render('index.ejs')
+    res.render('register.ejs')
 })
 
 app.get('/login', (req, res) => {
@@ -68,70 +70,91 @@ app.get('/my-blogs', (req, res) => {
     });
   });
 
-app.post('/register', (req, res) => {
+  app.post('/register', (req, res) => {
     const { username, password } = req.body;
-  
-        //sql injection vulerability
-    const query = `INSERT INTO users (username, password) VALUES ('${username}', '${password}')`;
-  
-    db.run(query, (err) => {
-      if (err) {
-        return res.status(500).send('Internal Server Error');
-      }
-  
-      console.log(`Registration successful ${username} + ${password}`);
-      res.redirect('/login');
-    });
-  });
 
-  app.post('/login', (req, res) => {
-    const { username, password } = req.body;
-  
-    //insecure
-    const query = `SELECT * FROM users WHERE username='${username}' AND password='${password}'`;
-  
-    db.get(query, (err, user) => {
+    // hash password
+    bcrypt.hash(password, 10, (hashErr, hashedPassword) => {
+        if (hashErr) {
+            return res.status(500).send('Internal Server Error');
+        }
+
+        //  parameterized query to stop SQL Injection attacks
+        const query = 'INSERT INTO users (username, password) VALUES (?, ?)';
+        
+        db.run(query, [username, hashedPassword], (err) => {
+            if (err) {
+                return res.status(500).send('Internal Server Error');
+            }
+
+            console.log(`Registration successful ${username}`);
+            res.redirect('/login');
+        });
+    });
+});
+
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  // parameterized query to protect  against SQL injection
+  const query = 'SELECT * FROM users WHERE username = ?';
+
+  db.get(query, [username], (err, user) => {
       if (err) {
-        return res.status(500).send('Internal Server Error');
+          return res.status(500).send('Internal Server Error');
       }
-  
+
       if (user) {
-        // successful login
-        req.session.userId = user.id;
-        req.session.username = user.username;
-        res.redirect('/blogs');
-        console.log(`Login successful: ${username} + ${password}`);
-        console.log(`New session started for user: ${username}` );
+          // check hashed password  
+          bcrypt.compare(password, user.password, (compareErr, match) => {
+              if (compareErr) {
+                  return res.status(500).send('Internal Server Error');
+              }
+
+              if (match) {
+                  // successful login
+                  req.session.userId = user.id;
+                  req.session.username = user.username;
+                  res.redirect('/blogs');
+                  console.log(`Login successful: ${username}`);
+                  console.log(`New session started for user: ${username}`);
+              } else {
+                  // invalid password
+                  res.status(401).send('Invalid username or password');
+              }
+          });
       } else {
-        // invalid credentials
-        res.status(401).send('Invalid username or password');
+          // user not found
+          res.status(401).send('Invalid username or password');
       }
-    });
   });
+});
+app.post('/create-blog', (req, res) => {
+  const { title, content } = req.body;
+  const authorId = req.session.userId;
 
-  app.post('/create-blog', (req, res) => {
-    const { title, content } = req.body;
-    const authorId = req.session.userId;
-  
-    // Insert the new blog post into the database
-    const query = 'INSERT INTO blogs (title, content, author_id) VALUES (?, ?, ?)';
-    const values = [title, content, authorId];
-  
-    db.run(query, values, function (err) {
+  // sanitize inputs to stop XSS
+  const sanitizedTitle = sanitizeHtml(title);
+  const sanitizedContent = sanitizeHtml(content);
+
+  //parameterized query
+  const query = 'INSERT INTO blogs (title, content, author_id) VALUES (?, ?, ?)';
+  const values = [sanitizedTitle, sanitizedContent, authorId];
+
+  db.run(query, values, function (err) {
       if (err) {
-        console.error(err);
-        return res.status(500).send('Internal Server Error');
+          console.error(err);
+          return res.status(500).send('Internal Server Error');
       }
-  
-      // blog successfully created
-      console.log('new blog created successfully')
+
+      // success
+      console.log('New blog created successfully');
       res.redirect('/blogs');
-    });
   });
+});
+
   
-
-
-
 
 // start the server
 app.listen(PORT, () => {
