@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Blogs</title>
+</head>
+<body>
+  <h1>My Blogs</h1>
+
+  <% if (userBlogs.length === 0) { %>
+    <p>No blogs available.</p>
+  <% } else { %>
+    <ul>
+      <% userBlogs.forEach(blog => { %>
+        <li>
+          <h3><%= blog.title %></h3>
+          <p><%= blog.content %></p>
+          <p>Created at: <%= blog.created_at %></p>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+
+</body>
+<style>body {
+  font-family: 'Arial', sans-serif;
+  margin: 20px;
+}
+
+h1 {
+  color: #333;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+li {
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+</style>
+</html>
